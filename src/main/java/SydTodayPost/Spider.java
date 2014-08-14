@@ -16,11 +16,8 @@ import org.apache.http.protocol.BasicHttpContext;
 import org.apache.http.protocol.HttpContext;
 import org.apache.commons.logging.Log;
 
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
+import java.io.*;
+import java.util.*;
 
 /**
  * Created with IntelliJ IDEA.
@@ -34,9 +31,19 @@ public class Spider {
 
     private final String HOST = "http://www.sydneytoday.com/";
     private final int INTERVAL = (60 * 60 + 10) * 1000; // every 1 hour plus 10 secs
-    private final int DELAY = 15 * 60 * 1000; // every 15 mins to try if previous action failed
+    private final int DELAY = 15 * 60 * 1000; // every 15 mins to try if previous action received waiting
+    private final String SUCCESS_CODE = "恭喜你";
+    private final String FAILED_CODE = "距离上次顶贴时间1小时后";
 
-    public Spider() {
+    private Properties configure;
+    private long successfulCount;
+    private long failedCount;
+    private long unknownCount;
+
+    public Spider(Properties properties) {
+        configure = properties;
+        successfulCount = 0;
+        failedCount = 0;
     }
 
     public void execute() {
@@ -49,14 +56,14 @@ public class Spider {
         log.info("Start logging in...");
         String loginLink = HOST + "do/login.php?f";
         Map<String, String> loginParams = new HashMap<String, String>();
-        loginParams.put("username", "aa");
-        loginParams.put("password", "bb");
+        loginParams.put("username", configure.getProperty("username"));
+        loginParams.put("password", configure.getProperty("password"));
         loginParams.put("cookietime", "0");
         loginParams.put("step", "2");
         loginParams.put("fromurl", HOST);
 
         try {
-            HttpResponse loginResponse = sendRequest(loginLink, loginParams, httpContext);
+            HttpResponse loginResponse = postRequest(loginLink, loginParams, httpContext);
             if (loginResponse.getStatusLine().getStatusCode() == 302) {
                 log.info("Logging successfully.");
             } else {
@@ -67,11 +74,51 @@ public class Spider {
             e.printStackTrace();
         }
 
-        //prepare to post
+        //prepare to update thread
+
 
     }
 
-    public HttpResponse sendRequest(String link, Map<String, String> params, HttpContext context) throws IOException {
+    private void doUpdate(HttpContext httpContext) throws InterruptedException {
+        log.info("Begin posting...");
+        String thread = configure.getProperty("thread");
+        String paramStr = thread.substring(thread.indexOf('?') + 1);
+        paramStr += "&job=update";
+        HttpResponse postResponse = getRequest(thread, paramStr, httpContext);
+        try {
+            String responseHtml = inputStreamToString(postResponse.getEntity().getContent());
+            if (responseHtml.contains(SUCCESS_CODE)) {
+                successfulCount++;
+                reportStatus();
+                Thread.sleep(INTERVAL);
+            } else {
+                if (responseHtml.contains(FAILED_CODE)) {
+                    failedCount++;
+                } else {
+                    unknownCount++;
+                    log.error("Unknown response: " + responseHtml);
+                }
+                reportStatus();
+                Thread.sleep(DELAY);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void reportStatus() {
+        log.info("Total attempts: " + successfulCount + failedCount + unknownCount +
+                ", Success: " + successfulCount + ", Failed: " + failedCount +
+                ", Unknown: " + unknownCount);
+    }
+
+    private HttpResponse getRequest(String link, String paramStr, HttpContext context) {
+
+
+        return null;
+    }
+
+    private HttpResponse postRequest(String link, Map<String, String> params, HttpContext context) throws IOException {
         HttpClient httpClient = HttpClients.createDefault();
         HttpPost post = new HttpPost(link);
         List<NameValuePair> nvps = new LinkedList<NameValuePair>();
@@ -80,5 +127,16 @@ public class Spider {
         }
         post.setEntity(new UrlEncodedFormEntity(nvps));
         return httpClient.execute(post, context);
+    }
+
+    private String inputStreamToString(InputStream inputStream) throws IOException {
+        Reader reader = new InputStreamReader(inputStream, "UTF-8");
+        BufferedReader bufferedReader = new BufferedReader(reader);
+        StringBuilder sb = new StringBuilder();
+        String buffer;
+        while ((buffer = bufferedReader.readLine()) != null) {
+            sb.append(buffer).append("\n");
+        }
+        return sb.toString();
     }
 }
