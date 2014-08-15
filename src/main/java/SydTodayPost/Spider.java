@@ -7,6 +7,7 @@ import org.apache.http.NameValuePair;
 import org.apache.http.client.CookieStore;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
+import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.protocol.HttpClientContext;
 import org.apache.http.impl.client.BasicCookieStore;
@@ -25,17 +26,19 @@ import java.util.*;
  * Date: 9/08/2014
  */
 
-public class Spider {
+public class Spider implements Runnable {
 
     private static final Log log = LogFactory.getLog(Spider.class);
 
     private final String HOST = "http://www.sydneytoday.com/";
     private final int INTERVAL = (60 * 60 + 10) * 1000; // every 1 hour plus 10 secs
-    private final int DELAY = 15 * 60 * 1000; // every 15 mins to try if previous action received waiting
+
     private final String SUCCESS_CODE = "恭喜你";
     private final String FAILED_CODE = "距离上次顶贴时间1小时后";
 
+    private HttpClient httpClient;
     private Properties configure;
+
     private long successfulCount;
     private long failedCount;
     private long unknownCount;
@@ -44,9 +47,11 @@ public class Spider {
         configure = properties;
         successfulCount = 0;
         failedCount = 0;
+        getHttpClient();
     }
 
-    public void execute() {
+    @Override
+    public void run() {
         // init session
         CookieStore cookieStore = new BasicCookieStore();
         HttpContext httpContext = new BasicHttpContext();
@@ -75,31 +80,39 @@ public class Spider {
         }
 
         //prepare to update thread
-
-
+        while(true) {
+            try {
+                doUpdate(httpContext);
+            } catch (Exception e) {
+                log.error("Posting error.");
+                e.printStackTrace();
+            }
+        }
     }
 
-    private void doUpdate(HttpContext httpContext) throws InterruptedException {
+    private void doUpdate(HttpContext httpContext) throws Exception {
         log.info("Begin posting...");
         String thread = configure.getProperty("thread");
         String paramStr = thread.substring(thread.indexOf('?') + 1);
         paramStr += "&job=update";
-        HttpResponse postResponse = getRequest(thread, paramStr, httpContext);
+        HttpResponse postResponse = getRequest(HOST + "job.php" , paramStr, httpContext);
         try {
             String responseHtml = inputStreamToString(postResponse.getEntity().getContent());
             if (responseHtml.contains(SUCCESS_CODE)) {
                 successfulCount++;
+                log.info("Post successfully.");
                 reportStatus();
                 Thread.sleep(INTERVAL);
             } else {
                 if (responseHtml.contains(FAILED_CODE)) {
                     failedCount++;
+                    log.warn("Post failed, waiting...");
                 } else {
                     unknownCount++;
                     log.error("Unknown response: " + responseHtml);
                 }
                 reportStatus();
-                Thread.sleep(DELAY);
+                Thread.sleep(Integer.parseInt(configure.getProperty("delay")));
             }
         } catch (IOException e) {
             e.printStackTrace();
@@ -107,19 +120,17 @@ public class Spider {
     }
 
     private void reportStatus() {
-        log.info("Total attempts: " + successfulCount + failedCount + unknownCount +
+        log.info("Total attempts: " + (successfulCount + failedCount + unknownCount) +
                 ", Success: " + successfulCount + ", Failed: " + failedCount +
                 ", Unknown: " + unknownCount);
     }
 
-    private HttpResponse getRequest(String link, String paramStr, HttpContext context) {
-
-
-        return null;
+    private HttpResponse getRequest(String link, String paramStr, HttpContext context) throws IOException {
+        HttpGet get = new HttpGet(link + "?" + paramStr);
+        return httpClient.execute(get, context);
     }
 
     private HttpResponse postRequest(String link, Map<String, String> params, HttpContext context) throws IOException {
-        HttpClient httpClient = HttpClients.createDefault();
         HttpPost post = new HttpPost(link);
         List<NameValuePair> nvps = new LinkedList<NameValuePair>();
         for (Map.Entry<String, String> entry : params.entrySet()) {
@@ -130,6 +141,7 @@ public class Spider {
     }
 
     private String inputStreamToString(InputStream inputStream) throws IOException {
+        // todo UTF-8 can't solve special character issue here, needs digging into
         Reader reader = new InputStreamReader(inputStream, "UTF-8");
         BufferedReader bufferedReader = new BufferedReader(reader);
         StringBuilder sb = new StringBuilder();
@@ -138,5 +150,10 @@ public class Spider {
             sb.append(buffer).append("\n");
         }
         return sb.toString();
+    }
+
+    private HttpClient getHttpClient() {
+        httpClient = HttpClients.createDefault();
+        return httpClient;
     }
 }
