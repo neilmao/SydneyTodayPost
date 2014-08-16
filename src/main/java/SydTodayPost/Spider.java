@@ -43,15 +43,19 @@ public class Spider implements Runnable {
     private long failedCount;
     private long unknownCount;
 
+    private boolean active;
+
     public Spider(Properties properties) {
         configure = properties;
         successfulCount = 0;
         failedCount = 0;
         getHttpClient();
+        active = false;
     }
 
     @Override
     public void run() {
+        active = true;
         // init session
         CookieStore cookieStore = new BasicCookieStore();
         HttpContext httpContext = new BasicHttpContext();
@@ -80,7 +84,7 @@ public class Spider implements Runnable {
         }
 
         //prepare to update thread
-        while(true) {
+        while(active) {
             try {
                 doUpdate(httpContext);
             } catch (Exception e) {
@@ -104,22 +108,23 @@ public class Spider implements Runnable {
                 reportStatus();
                 Thread.sleep(INTERVAL);
             } else {
+                int delay = Integer.parseInt(configure.getProperty("delay"));
                 if (responseHtml.contains(FAILED_CODE)) {
                     failedCount++;
-                    log.warn("Post failed, waiting...");
+                    log.warn("Post failed, waiting for " + Math.round(delay / 1000 / 60) + " mins.");
                 } else {
                     unknownCount++;
                     log.error("Unknown response: " + responseHtml);
                 }
                 reportStatus();
-                Thread.sleep(Integer.parseInt(configure.getProperty("delay")));
+                Thread.sleep(delay);
             }
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
-    private void reportStatus() {
+    public void reportStatus() {
         log.info("Total attempts: " + (successfulCount + failedCount + unknownCount) +
                 ", Success: " + successfulCount + ", Failed: " + failedCount +
                 ", Unknown: " + unknownCount);
@@ -141,8 +146,7 @@ public class Spider implements Runnable {
     }
 
     private String inputStreamToString(InputStream inputStream) throws IOException {
-        // todo UTF-8 can't solve special character issue here, needs digging into
-        Reader reader = new InputStreamReader(inputStream, "UTF-8");
+        Reader reader = new InputStreamReader(inputStream, "gb2312");
         BufferedReader bufferedReader = new BufferedReader(reader);
         StringBuilder sb = new StringBuilder();
         String buffer;
@@ -155,5 +159,10 @@ public class Spider implements Runnable {
     private HttpClient getHttpClient() {
         httpClient = HttpClients.createDefault();
         return httpClient;
+    }
+
+    public void stop() {
+        active = false;
+        log.warn("Stopping is scheduled.");
     }
 }

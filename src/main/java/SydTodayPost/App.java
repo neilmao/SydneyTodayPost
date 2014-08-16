@@ -3,12 +3,11 @@ package SydTodayPost;
 import org.apache.commons.logging.LogFactory;
 import org.apache.commons.logging.Log;
 
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
 import java.util.Properties;
 
 /**
- * Hello world!
+ * SydneyToday Auto Post Program
  *
  */
 public class App 
@@ -24,9 +23,40 @@ public class App
         if (properties == null) {
             log.warn("File \"" + SETTINGS_FILE + "\" is missing, program exit.");
         } else {
-            Runnable spider = new Spider(properties);
+            Spider spider = new Spider(properties);
             Thread thread = new Thread(spider);
-            thread.start();
+
+            String command = "Command: \"start\", \"stop\", \"status\", \"time\", \"interrupt\"";
+            log.info(command);
+
+            // listen on keyboard
+            BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
+            String buffer;
+            while ((buffer = reader.readLine()) != null) {
+                if ("start".equals(buffer)) {
+                    if (!thread.isAlive())
+                        thread.start();
+                    else
+                        log.warn("Already started.");
+                    continue;
+                }
+                if ("status".equals(buffer)) {
+                    spider.reportStatus();
+                    continue;
+                }
+                if ("time".equals(buffer)) {
+                    continue;
+                }
+                if ("stop".equals(buffer)) {
+                    spider.stop();
+                    continue;
+                }
+                if ("interrupt".equals(buffer)) {
+                    thread.interrupt();
+                    return;
+                }
+                log.warn("Unknown command. " + command);
+            }
         }
     }
 
