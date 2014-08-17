@@ -12,22 +12,22 @@ import java.util.Properties;
  */
 public class App 
 {
-    private static Log log = LogFactory.getLog(App.class);
+    private static Log LOG = LogFactory.getLog(App.class);
     private static final String SETTINGS_FILE = "/settings.properties";
 
     public static void main( String[] args ) throws IOException {
 
-        log.info( "Loading configurations from file \"" + SETTINGS_FILE + "\"..." );
+        LOG.info("Loading configurations from file \"" + SETTINGS_FILE + "\"...");
         Properties properties = new App().loadSettings();
 
         if (properties == null) {
-            log.warn("File \"" + SETTINGS_FILE + "\" is missing, program exit.");
+            LOG.warn("File \"" + SETTINGS_FILE + "\" is missing, program exit.");
         } else {
             Spider spider = new Spider(properties);
             Thread thread = new Thread(spider);
 
             String command = "Command: \"start\", \"stop\", \"status\", \"time\", \"interrupt\"";
-            log.info(command);
+            LOG.info(command);
 
             // listen on keyboard
             BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
@@ -37,7 +37,7 @@ public class App
                     if (!thread.isAlive())
                         thread.start();
                     else
-                        log.warn("Already started.");
+                        LOG.warn("Already started.");
                     continue;
                 }
                 if ("status".equals(buffer)) {
@@ -55,7 +55,7 @@ public class App
                     thread.interrupt();
                     return;
                 }
-                log.warn("Unknown command. " + command);
+                LOG.warn("Unknown command. " + command);
             }
         }
     }

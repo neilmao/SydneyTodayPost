@@ -28,7 +28,7 @@ import java.util.*;
 
 public class Spider implements Runnable {
 
-    private static final Log log = LogFactory.getLog(Spider.class);
+    private static final Log LOG = LogFactory.getLog(Spider.class);
 
     private final String HOST = "http://www.sydneytoday.com/";
     private final int INTERVAL = (60 * 60 + 10) * 1000; // every 1 hour plus 10 secs
@@ -62,7 +62,7 @@ public class Spider implements Runnable {
         httpContext.setAttribute(HttpClientContext.COOKIE_STORE, cookieStore);
 
         // prepare to login
-        log.info("Start logging in...");
+        LOG.info("Start logging in...");
         String loginLink = HOST + "do/login.php?f";
         Map<String, String> loginParams = new HashMap<String, String>();
         loginParams.put("username", configure.getProperty("username"));
@@ -74,9 +74,9 @@ public class Spider implements Runnable {
         try {
             HttpResponse loginResponse = postRequest(loginLink, loginParams, httpContext);
             if (loginResponse.getStatusLine().getStatusCode() == 302) {
-                log.info("Logging successfully.");
+                LOG.info("Logging successfully.");
             } else {
-                log.warn("Incorrect credentials. Program stops.");
+                LOG.warn("Incorrect credentials. Program stops.");
                 return;
             }
         } catch (IOException e) {
@@ -88,14 +88,14 @@ public class Spider implements Runnable {
             try {
                 doUpdate(httpContext);
             } catch (Exception e) {
-                log.error("Posting error.");
+                LOG.error("Posting error.");
                 e.printStackTrace();
             }
         }
     }
 
     private void doUpdate(HttpContext httpContext) throws Exception {
-        log.info("Begin posting...");
+        LOG.info("Begin posting...");
         String thread = configure.getProperty("thread");
         String paramStr = thread.substring(thread.indexOf('?') + 1);
         paramStr += "&job=update";
@@ -104,17 +104,17 @@ public class Spider implements Runnable {
             String responseHtml = inputStreamToString(postResponse.getEntity().getContent());
             if (responseHtml.contains(SUCCESS_CODE)) {
                 successfulCount++;
-                log.info("Post successfully.");
+                LOG.info("Post successfully.");
                 reportStatus();
                 Thread.sleep(INTERVAL);
             } else {
                 int delay = Integer.parseInt(configure.getProperty("delay"));
                 if (responseHtml.contains(FAILED_CODE)) {
                     failedCount++;
-                    log.warn("Post failed, waiting for " + Math.round(delay / 1000 / 60) + " mins.");
+                    LOG.warn("Post failed, waiting for " + Math.round(delay / 1000 / 60) + " mins.");
                 } else {
                     unknownCount++;
-                    log.error("Unknown response: " + responseHtml);
+                    LOG.error("Unknown response: " + responseHtml);
                 }
                 reportStatus();
                 Thread.sleep(delay);
@@ -125,7 +125,7 @@ public class Spider implements Runnable {
     }
 
     public void reportStatus() {
-        log.info("Total attempts: " + (successfulCount + failedCount + unknownCount) +
+        LOG.info("Total attempts: " + (successfulCount + failedCount + unknownCount) +
                 ", Success: " + successfulCount + ", Failed: " + failedCount +
                 ", Unknown: " + unknownCount);
     }
@@ -163,6 +163,6 @@ public class Spider implements Runnable {
 
     public void stop() {
         active = false;
-        log.warn("Stopping is scheduled.");
+        LOG.warn("Stopping is scheduled.");
     }
 }
