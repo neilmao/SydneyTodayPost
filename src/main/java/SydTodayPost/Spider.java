@@ -6,6 +6,7 @@ import org.apache.http.HttpResponse;
 import org.apache.http.NameValuePair;
 import org.apache.http.client.CookieStore;
 import org.apache.http.client.HttpClient;
+import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
@@ -30,14 +31,13 @@ public class Spider implements Runnable {
 
     private static final Log LOG = LogFactory.getLog(Spider.class);
 
-    private final String HOST = "http://www.sydneytoday.com/";
-    private final int INTERVAL = (60 * 60 + 10) * 1000; // every 1 hour plus 10 secs
+    private final static String HOST = "http://www.sydneytoday.com/";
+    private final static long INTERVAL = (60 * 60 + 10) * 1000; // every 1 hour plus 10 secs
+    private final static int TIMEOUT = 15 * 1000;
+    private final static String SUCCESS_CODE = "恭喜你";
+    private final static String FAILED_CODE = "距离上次顶贴时间1小时后";
 
-    private final String SUCCESS_CODE = "恭喜你";
-    private final String FAILED_CODE = "距离上次顶贴时间1小时后";
-
-    private HttpClient httpClient;
-    private Properties configure;
+    private Properties properties;
 
     private long successfulCount;
     private long failedCount;
@@ -45,11 +45,12 @@ public class Spider implements Runnable {
 
     private boolean active;
 
+    private long startTimeStamp;
+
     public Spider(Properties properties) {
-        configure = properties;
+        this.properties = properties;
         successfulCount = 0;
         failedCount = 0;
-        getHttpClient();
         active = false;
     }
 
@@ -65,14 +66,14 @@ public class Spider implements Runnable {
         LOG.info("Start logging in...");
         String loginLink = HOST + "do/login.php?f";
         Map<String, String> loginParams = new HashMap<String, String>();
-        loginParams.put("username", configure.getProperty("username"));
-        loginParams.put("password", configure.getProperty("password"));
+        loginParams.put("username", properties.getProperty("username"));
+        loginParams.put("password", properties.getProperty("password"));
         loginParams.put("cookietime", "0");
         loginParams.put("step", "2");
         loginParams.put("fromurl", HOST);
 
         try {
-            HttpResponse loginResponse = postRequest(loginLink, loginParams, httpContext);
+            HttpResponse loginResponse = postRequest(getHttpClient(), loginLink, loginParams, httpContext);
             if (loginResponse.getStatusLine().getStatusCode() == 302) {
                 LOG.info("Logging successfully.");
             } else {
@@ -92,23 +93,24 @@ public class Spider implements Runnable {
                 e.printStackTrace();
             }
         }
+        LOG.info("Program stopped.");
     }
 
     private void doUpdate(HttpContext httpContext) throws Exception {
         LOG.info("Begin posting...");
-        String thread = configure.getProperty("thread");
+        String thread = properties.getProperty("thread");
         String paramStr = thread.substring(thread.indexOf('?') + 1);
         paramStr += "&job=update";
-        HttpResponse postResponse = getRequest(HOST + "job.php" , paramStr, httpContext);
+        HttpResponse getResponse = getRequest(getHttpClient(), HOST + "job.php" , paramStr, httpContext);
         try {
-            String responseHtml = inputStreamToString(postResponse.getEntity().getContent());
+            String responseHtml = inputStreamToString(getResponse.getEntity().getContent());
             if (responseHtml.contains(SUCCESS_CODE)) {
                 successfulCount++;
                 LOG.info("Post successfully.");
                 reportStatus();
                 Thread.sleep(INTERVAL);
             } else {
-                int delay = Integer.parseInt(configure.getProperty("delay"));
+                int delay = Integer.parseInt(properties.getProperty("delay"));
                 if (responseHtml.contains(FAILED_CODE)) {
                     failedCount++;
                     LOG.warn("Post failed, waiting for " + Math.round(delay / 1000 / 60) + " mins.");
@@ -130,12 +132,12 @@ public class Spider implements Runnable {
                 ", Unknown: " + unknownCount);
     }
 
-    private HttpResponse getRequest(String link, String paramStr, HttpContext context) throws IOException {
+    private HttpResponse getRequest(HttpClient httpClient, String link, String paramStr, HttpContext context) throws IOException {
         HttpGet get = new HttpGet(link + "?" + paramStr);
         return httpClient.execute(get, context);
     }
 
-    private HttpResponse postRequest(String link, Map<String, String> params, HttpContext context) throws IOException {
+    private HttpResponse postRequest(HttpClient httpClient, String link, Map<String, String> params, HttpContext context) throws IOException {
         HttpPost post = new HttpPost(link);
         List<NameValuePair> nvps = new LinkedList<NameValuePair>();
         for (Map.Entry<String, String> entry : params.entrySet()) {
@@ -157,8 +159,12 @@ public class Spider implements Runnable {
     }
 
     private HttpClient getHttpClient() {
-        httpClient = HttpClients.createDefault();
-        return httpClient;
+        RequestConfig requestConfig = RequestConfig.custom().
+                setConnectTimeout(TIMEOUT).
+                setConnectionRequestTimeout(TIMEOUT).
+                setSocketTimeout(TIMEOUT).
+                build();
+        return HttpClients.custom().setDefaultRequestConfig(requestConfig).build();
     }
 
     public void stop() {

@@ -26,7 +26,7 @@ public class App
             Spider spider = new Spider(properties);
             Thread thread = new Thread(spider);
 
-            String command = "Command: \"start\", \"stop\", \"status\", \"time\", \"interrupt\"";
+            String command = "Command: \"start\", \"stop\", \"status\", \"quit\"";
             LOG.info(command);
 
             // listen on keyboard
@@ -44,15 +44,13 @@ public class App
                     spider.reportStatus();
                     continue;
                 }
-                if ("time".equals(buffer)) {
-                    continue;
-                }
                 if ("stop".equals(buffer)) {
                     spider.stop();
-                    continue;
+                    return;
                 }
-                if ("interrupt".equals(buffer)) {
-                    thread.interrupt();
+                if ("quit".equals(buffer) || "q".equals(buffer)) {
+                    if (thread.isAlive())
+                        thread.interrupt();
                     return;
                 }
                 LOG.warn("Unknown command. " + command);
