@@ -44,14 +44,17 @@ public class Spider implements Runnable {
     private long unknownCount;
 
     private boolean active;
-
+    private Status status;
     private long startTimeStamp;
+    private long delay;
 
     public Spider(Properties properties) {
         this.properties = properties;
         successfulCount = 0;
         failedCount = 0;
         active = false;
+        status = Status.Wait;
+        delay = Long.parseLong(properties.getProperty("delay"));
     }
 
     @Override
@@ -107,10 +110,11 @@ public class Spider implements Runnable {
             if (responseHtml.contains(SUCCESS_CODE)) {
                 successfulCount++;
                 LOG.info("Post successfully.");
+                startTimeStamp = System.currentTimeMillis();
+                status = Status.Wait;
                 reportStatus();
                 Thread.sleep(INTERVAL);
             } else {
-                int delay = Integer.parseInt(properties.getProperty("delay"));
                 if (responseHtml.contains(FAILED_CODE)) {
                     failedCount++;
                     LOG.warn("Post failed, waiting for " + Math.round(delay / 1000 / 60) + " mins.");
@@ -118,6 +122,8 @@ public class Spider implements Runnable {
                     unknownCount++;
                     LOG.error("Unknown response: " + responseHtml);
                 }
+                startTimeStamp = System.currentTimeMillis();
+                status = Status.Delay;
                 reportStatus();
                 Thread.sleep(delay);
             }
@@ -127,9 +133,16 @@ public class Spider implements Runnable {
     }
 
     public void reportStatus() {
+        long restTime;
+        long now = System.currentTimeMillis();
+        if (status == Status.Wait) {
+            restTime = INTERVAL - (now - startTimeStamp);
+        } else {
+            restTime = delay - (now - startTimeStamp);
+        }
         LOG.info("Total attempts: " + (successfulCount + failedCount + unknownCount) +
                 ", Success: " + successfulCount + ", Failed: " + failedCount +
-                ", Unknown: " + unknownCount);
+                ", Unknown: " + unknownCount + "; Will retry in " + Math.round(restTime / 1000 / 60) + " mins.");
     }
 
     private HttpResponse getRequest(HttpClient httpClient, String link, String paramStr, HttpContext context) throws IOException {
