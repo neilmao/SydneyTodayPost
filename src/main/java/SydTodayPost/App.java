@@ -49,8 +49,10 @@ public class App
                     return;
                 }
                 if ("quit".equals(buffer) || "q".equals(buffer)) {
-                    if (thread.isAlive())
+                    if (thread.isAlive()) {
+                        spider.stop();
                         thread.interrupt();
+                    }
                     return;
                 }
                 LOG.warn("Unknown command. " + command);
