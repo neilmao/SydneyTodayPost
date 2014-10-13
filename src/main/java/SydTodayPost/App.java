@@ -20,6 +20,9 @@ public class App
         LOG.info("Loading configurations from file \"" + SETTINGS_FILE + "\"...");
         Properties properties = new App().loadSettings();
 
+        if (args.length > 0 && properties != null)
+            properties.setProperty("thread", args[0]);
+
         if (properties == null) {
             LOG.warn("File \"" + SETTINGS_FILE + "\" is missing, program exit.");
         } else {
