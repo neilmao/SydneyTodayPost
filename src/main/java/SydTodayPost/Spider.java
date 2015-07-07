@@ -205,6 +205,8 @@ public class Spider implements Runnable {
         while ((buffer = bufferedReader.readLine()) != null) {
             sb.append(buffer).append("\n");
         }
+        bufferedReader.close();
+        reader.close();
         return sb.toString();
     }
 
