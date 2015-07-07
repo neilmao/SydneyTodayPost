@@ -1,6 +1,8 @@
 package SydTodayPost;
 
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.logging.LogFactory;
 import org.apache.http.HttpResponse;
 import org.apache.http.NameValuePair;
@@ -17,6 +19,9 @@ import org.apache.http.message.BasicNameValuePair;
 import org.apache.http.protocol.BasicHttpContext;
 import org.apache.http.protocol.HttpContext;
 import org.apache.commons.logging.Log;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.select.Elements;
 
 import java.io.*;
 import java.util.*;
@@ -57,7 +62,6 @@ public class Spider implements Runnable {
         delay = Long.parseLong(properties.getProperty("delay"));
     }
 
-    @Override
     public void run() {
         active = true;
         // init session
@@ -65,15 +69,40 @@ public class Spider implements Runnable {
         HttpContext httpContext = new BasicHttpContext();
         httpContext.setAttribute(HttpClientContext.COOKIE_STORE, cookieStore);
 
+        // Load login page
+        LOG.info("Loading logging page...");
+        String loginPage = HOST + "user/login?destination=/";
+        String loginFormHtml = null;
+        try{
+            HttpResponse response = getRequest(getHttpClient(), loginPage, "", httpContext);
+            loginFormHtml = inputStreamToString(response.getEntity().getContent());
+        } catch (IOException e) {
+            LOG.warn("Failed to load login page.");
+        }
+
+        if (StringUtils.isBlank(loginFormHtml)) {
+            LOG.warn("Empty response.");
+            return;
+        }
+
+        Document rootDoc = Jsoup.parse(loginFormHtml);
+        Elements elements = rootDoc.select("#login-form input[name=form_build_id]");
+        if (elements.size() == 0) {
+            LOG.warn("form_build_id not found.");
+            return;
+        }
+
+        org.jsoup.nodes.Element element = elements.get(0);
+        String formBuildId = element.val();
+
         // prepare to login
         LOG.info("Start logging in...");
-        String loginLink = HOST + "do/login.php?f";
+        String loginLink = HOST + "user/login?destination=/";
         Map<String, String> loginParams = new HashMap<String, String>();
-        loginParams.put("username", properties.getProperty("username"));
-        loginParams.put("password", properties.getProperty("password"));
-        loginParams.put("cookietime", "0");
-        loginParams.put("step", "2");
-        loginParams.put("fromurl", HOST);
+        loginParams.put("name", properties.getProperty("username"));
+        loginParams.put("pass", properties.getProperty("password"));
+        loginParams.put("form_id", "user_login");
+        loginParams.put("form_build_id", formBuildId);
 
         try {
             HttpResponse loginResponse = postRequest(getHttpClient(), loginLink, loginParams, httpContext);
@@ -102,12 +131,15 @@ public class Spider implements Runnable {
     private void doUpdate(HttpContext httpContext) throws Exception {
         LOG.info("Begin posting...");
         String thread = properties.getProperty("thread");
-        String paramStr = thread.substring(thread.indexOf('?') + 1);
-        paramStr += "&job=update";
-        HttpResponse getResponse = getRequest(getHttpClient(), HOST + "job.php" , paramStr, httpContext);
+        String id = thread.substring(thread.lastIndexOf('/') + 1);
+        HttpResponse getResponse = getRequest(getHttpClient(), HOST + "nodesticky/" + id , "", httpContext);
         try {
             String responseHtml = inputStreamToString(getResponse.getEntity().getContent());
-            if (responseHtml.contains(SUCCESS_CODE)) {
+            ObjectMapper objectMapper = new ObjectMapper();
+
+            UpvoteResponse result = objectMapper.readValue(responseHtml, UpvoteResponse.class);
+
+            if (1 == result.getStatus()) {
                 successfulCount++;
                 LOG.info("Post successfully.");
                 startTimeStamp = System.currentTimeMillis();
@@ -115,12 +147,14 @@ public class Spider implements Runnable {
                 reportStatus();
                 Thread.sleep(INTERVAL);
             } else {
-                if (responseHtml.contains(FAILED_CODE)) {
+                if (2 == result.getStatus()) {
                     failedCount++;
                     LOG.warn("Post failed, waiting for " + Math.round(delay / 1000 / 60) + " mins.");
                 } else {
-                    unknownCount++;
-                    LOG.error("Unknown response: " + responseHtml);
+                    if (-1 == result.getStatus()) {
+                        failedCount++;
+                        LOG.warn("Need to login first.");
+                    }
                 }
                 startTimeStamp = System.currentTimeMillis();
                 status = Status.Delay;
@@ -146,7 +180,10 @@ public class Spider implements Runnable {
     }
 
     private HttpResponse getRequest(HttpClient httpClient, String link, String paramStr, HttpContext context) throws IOException {
-        HttpGet get = new HttpGet(link + "?" + paramStr);
+        if (StringUtils.isNotBlank(paramStr))
+            link = link + "?" + paramStr;
+
+        HttpGet get = new HttpGet(link);
         return httpClient.execute(get, context);
     }
 
