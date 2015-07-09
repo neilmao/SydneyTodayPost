@@ -154,6 +154,9 @@ public class Spider implements Runnable {
                     if (-1 == result.getStatus()) {
                         failedCount++;
                         LOG.warn("Need to login first.");
+                    } else {
+                        LOG.error("Unknown error:" + responseHtml);
+                        return;
                     }
                 }
                 startTimeStamp = System.currentTimeMillis();
