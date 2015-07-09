@@ -134,7 +134,7 @@ public class Spider implements Runnable {
         String id = thread.substring(thread.lastIndexOf('/') + 1);
         HttpResponse getResponse = getRequest(getHttpClient(), HOST + "nodesticky/" + id , "", httpContext);
         try {
-            String responseHtml = inputStreamToString(getResponse.getEntity().getContent());
+            String responseHtml = cleanHTML(inputStreamToString(getResponse.getEntity().getContent()));
             ObjectMapper objectMapper = new ObjectMapper();
 
             UpvoteResponse result = objectMapper.readValue(responseHtml, UpvoteResponse.class);
@@ -164,6 +164,10 @@ public class Spider implements Runnable {
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    private String cleanHTML(String html) {
+        return html.replaceAll("\n", "").replaceAll("<!--test-->", "");
     }
 
     public void reportStatus() {
