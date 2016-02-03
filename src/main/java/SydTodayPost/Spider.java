@@ -37,7 +37,7 @@ public class Spider implements Runnable {
     private static final Log LOG = LogFactory.getLog(Spider.class);
 
     private final static String HOST = "http://www.sydneytoday.com/";
-    private final static long INTERVAL = (60 * 60 + 10) * 1000; // every 1 hour plus 10 secs
+//    private final static long INTERVAL = (60 * 60 + 10) * 1000; // every 1 hour plus 10 secs
     private final static int TIMEOUT = 15 * 1000;
     private final static String SUCCESS_CODE = "恭喜你";
     private final static String FAILED_CODE = "距离上次顶贴时间1小时后";
@@ -52,14 +52,16 @@ public class Spider implements Runnable {
     private Status status;
     private long startTimeStamp;
     private long delay;
+    private long interval;
 
     public Spider(Properties properties) {
         this.properties = properties;
-        successfulCount = 0;
-        failedCount = 0;
-        active = false;
-        status = Status.Wait;
-        delay = Long.parseLong(properties.getProperty("delay"));
+        this.successfulCount = 0;
+        this.failedCount = 0;
+        this.active = false;
+        this.status = Status.Wait;
+        this.delay = Long.parseLong(properties.getProperty("delay"));
+        this.interval = Long.parseLong(properties.getProperty("interval"));
     }
 
     public void run() {
@@ -145,7 +147,7 @@ public class Spider implements Runnable {
                 startTimeStamp = System.currentTimeMillis();
                 status = Status.Wait;
                 reportStatus();
-                Thread.sleep(INTERVAL);
+                Thread.sleep(interval);
             } else {
                 if (2 == result.getStatus()) {
                     failedCount++;
@@ -166,6 +168,7 @@ public class Spider implements Runnable {
             }
         } catch (IOException e) {
             e.printStackTrace();
+            Thread.sleep(delay);
         }
     }
 
@@ -177,7 +180,7 @@ public class Spider implements Runnable {
         long restTime;
         long now = System.currentTimeMillis();
         if (status == Status.Wait) {
-            restTime = INTERVAL - (now - startTimeStamp);
+            restTime = interval - (now - startTimeStamp);
         } else {
             restTime = delay - (now - startTimeStamp);
         }

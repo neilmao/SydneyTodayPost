@@ -80,6 +80,8 @@ public class App
         bw.write("thread=\n");
         bw.write("# delay every 15 mins to try if previous action received waiting\n");
         bw.write("delay=900000\n");
+        bw.write("# post interval in milliseconds, defaults to 12 hours\n");
+        bw.write("interval=43200000\n");
         bw.close();
     }
 }
